@@ -23,6 +23,13 @@ pnpx truffle compile
 pnpx truffle migrate --reset
 ~~~
 
+### Testing
+Runs every test in the ./test directory
+
+~~~
+pnpx truffle test
+~~~
+
 ### Execute scripts
 
 ~~~
