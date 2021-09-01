@@ -50,11 +50,14 @@ contract Wager {
 		bettor.votes = votes;
 		bettor.voted = true;
 
-		TotalPool += msg.value;
-
 		for (uint i = 0; i < Games.length; i++) {
 			Games[i].votes[votes[i]]++;
 		}
+
+		uint256 forChair = TotalPool * 500 / 10000; //A: 5% for the chairperson
+		Chairperson.transfer(forChair);
+
+		TotalPool += msg.value - forChair;
 	}
 
 	function startGames() public { //U: Marks the games a started TODO: Automatize with a date
@@ -63,7 +66,6 @@ contract Wager {
 		require(!Done, "The games are already done");
 
 		Started = true;
-
 		GamePool = TotalPool / (uint256(Games.length));
 	}
 
@@ -78,11 +80,6 @@ contract Wager {
 		for (uint i = 0; i < Games.length; i++) {
 			Games[i].result = results[i];
 		}
-
-		//TODO: Move this transfer to when they place a bet
-		uint256 forChair = TotalPool * 500 / 10000; //A: 5% for the chairperson
-		TotalPool -= forChair;
-		Chairperson.transfer(forChair);
 	}
 
 	function claimPrize() public { //U: Let the winners extract their prize
@@ -96,9 +93,9 @@ contract Wager {
 		uint256 prize = 0;
 		for (uint i = 0; i < Games.length; i++) {
 			uint result = Games[i].result;
-			uint otherVotes = Games[i].votes[result];
+			uint256 otherVotes = Games[i].votes[result];
 			if (bettor.votes[i] == result) { //A: They got this one right
-				prize += GamePool / uint256(otherVotes); //A: 1/guesses for this result
+				prize += GamePool / otherVotes; //A: 1/guesses for this result
 				//A: It's not dividing by zero because AT LEAST this person voted for this result
 			}
 		}

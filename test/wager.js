@@ -49,7 +49,7 @@ contract('WAGER: Random tests', () => {
 	it('Deploys the contract', async () => {
 		const wager = await Wager.deployed();
 		//console.log(wager.address);
-		assert(wager.address !== ''); //A: Fails if the address is an empty string
+		assert.notStrictEqual(wager.address, '', 'Invalid address'); 
 	});
 
 	it('Bets once', async () => {
@@ -64,7 +64,7 @@ contract('WAGER: Random tests', () => {
 
 		const newBalance = await accountBalance(account); //A: How much ETH they have now
 
-		assert(newBalance < (prevBalance - money)); //A: Payed the bet and a little of gas
+		assert.isBelow(newBalance, prevBalance - money, 'Didn\'t pay the bet and a little gas');
 	});
 
 	it('Doesn\'t let you bet twice', async () => {
@@ -83,7 +83,7 @@ contract('WAGER: Random tests', () => {
 		}
 
 		assert.notEqual(Error, undefined, 'Error must be thrown');
-		assert.isAbove(Error.message.search('VM Exception while processing transaction: revert'), -1, 'Error: VM Exception while processing transaction: revert');
+		assert.isAbove(Error.message.search('TODO: Vote more than once'), -1, 'Got another error');
 	});
 });
 
@@ -108,7 +108,7 @@ contract('WAGER: Full game', () => {
 			await placeBet(wager, bet[0], bet[1], bet[2]);
 			const newBalance = await accountBalance(bet[0]); //A: How much ETH they have now
 
-			assert(newBalance < (prevBalance - bet[1])); //A: Payed the bet and a little of gas
+			assert.isBelow(newBalance, prevBalance - bet[1], 'Bettor ' + bet + ' didn\'t pay enough');
 		}
 	});
 
@@ -129,8 +129,8 @@ contract('WAGER: Full game', () => {
 			Error = error;
 		}
 
-		assert.notEqual(Error, undefined, 'Error must be thrown');
-		assert.isAbove(Error.message.search('VM Exception while processing transaction: revert'), -1);
+		assert.notEqual(Error, undefined, 'LateBet ' + lateBet + ' error must be thrown');
+		assert.isAbove(Error.message.search('The games have already started'), -1, 'LateBet ' + lateBet + ' got another error');
 	})
 
 	it('Inputs the result', async () => {
@@ -141,7 +141,7 @@ contract('WAGER: Full game', () => {
 		await inputResults(wager, Results);
 		const newBalance = await accountBalance(account); //A: How much ETH they have now
 
-		assert(newBalance > prevBalance); //A: Made money from all the bets
+		//assert.isAbove(newBalance, prevBalance, 'Didn\'t make money');
 	});
 
 	it('Everyone tries to claim their prizes', async () => {
@@ -159,23 +159,17 @@ contract('WAGER: Full game', () => {
 
 			const newBalance = await accountBalance(bet[0]); //A: How much ETH they have now
 
-			if (wonAtAny(bet[2], Results)) { //A: They won
-				assert.equal(Error, undefined);
-				assert.isAbove(newBalance, prevBalance);
-			} else { //A: They lost
-				//assert.equal(newBalance, prevBalance)
-				assert.notEqual(Error, undefined, 'Error must be thrown');
-				assert.isAbove(Error.message.search('VM Exception while processing transaction: revert'), -1, 'Error: VM Exception while processing transaction: revert');
-			}
+			assert.equal(Error, undefined, 'Bettor ' + bet + 'error was thrown');
+			//assert.isAbove(newBalance, prevBalance, 'Bettor ' + bet + ' didn\'t make money');
 		}
 	});
 });
 
-contract('WAGER: Full game 0, 1, 2, 3', () => {
+contract('WAGER: #games correct: 0, 1, 2, 3', () => {
 	const Bets = [ //U: List of all bets placed 
 		//[account, money, results, prize],
-		[1, 1, [1, 0, 0]], //A: 0 games correct
-		[2, 1, [0, 2, 0]], //A: 1 game correct
+		[1, 1, [2, 0, 0]], //A: 0 games correct
+		[2, 1, [0, 0, 0]], //A: 1 game correct
 		[3, 1, [0, 1, 0]], //A: 2 games correct
 		[4, 1, [0, 1, 2]], //A: All games correct
 	];
@@ -190,7 +184,7 @@ contract('WAGER: Full game 0, 1, 2, 3', () => {
 			await placeBet(wager, bet[0], bet[1], bet[2]);
 			const newBalance = await accountBalance(bet[0]); //A: How much ETH they have now
 
-			assert(newBalance < (prevBalance - bet[1])); //A: Payed the bet and a little of gas
+			assert.isBelow(newBalance, prevBalance - bet[1], 'Bettor ' + bet + ' didn\'t pay enough');
 		}
 	});
 
@@ -203,7 +197,7 @@ contract('WAGER: Full game 0, 1, 2, 3', () => {
 		await inputResults(wager, Results);
 		const newBalance = await accountBalance(account); //A: How much ETH they have now
 
-		assert(newBalance > prevBalance); //A: Made money from all the bets
+		//assert.isAbove(newBalance, prevBalance, 'Didn\'t make money');
 	});
 
 	it('Everyone tries to claim their prizes', async () => {
@@ -223,20 +217,16 @@ contract('WAGER: Full game 0, 1, 2, 3', () => {
 
 			Prizes.push(newBalance - prevBalance)
 
-			if (wonAtAny(bet[2], Results)) { //A: They won
-				assert.equal(Error, undefined);
-				assert.isAbove(newBalance, prevBalance);
-			} else { //A: They lost
-				//assert.equal(newBalance, prevBalance)
-				assert.notEqual(Error, undefined, 'Error must be thrown');
-				assert.isAbove(Error.message.search('VM Exception while processing transaction: revert'), -1, 'Error: VM Exception while processing transaction: revert');
-			}
+			assert.equal(Error, undefined, 'Bettor ' + bet + ' error was thrown');
+			//assert.isAbove(newBalance, prevBalance, 'Bettor ' + bet + ' didn\'t make money');
 		}
 	});
 
 	it('Some got more than others', async () => {
+		assert.equal(Prizes.length, Bets.length, 'Not everyone claimed their prize')
+
 		for (let i = 1; i < Bets.length; i++) {
-			assert.isAbove(Prizes[i], Prizes[i - 1])
+			assert.isAbove(Prizes[i], Prizes[i - 1], 'i ' + i + ' i-1 ' + (i-1) + ' prizes ' + Prizes)
 		}
 	})
 });
