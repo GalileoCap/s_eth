@@ -10,62 +10,76 @@ contract Wager {
 	bool public Done = false; //U: If the game has already been played, and money can be extracted
 
 	uint256 public TotalPool = 0; //U: Total pool of money
+	uint256 public GamePool = 0; //U: Equal parts of the total pool for each game 
 
-	uint[3][13] public Games; //U: List of games with the number of votes for each result
-	uint[13] public Results; //U: Results for each game (0 local, 1 away, 2 tie)
+	struct Game {
+		uint[3] votes; //U: Votes for each result (0 local, 1 away, 2 tie)
+		uint result; //U: Result for the game (0 local, 1 away, 2 tie)
+	}
+	Game[] public Games; //U: List of games with the number of votes for each result
+
+	function Test() public view returns (Game[] memory) {
+		return Games;
+	}
 
 	struct Bettor {
-		uint[13] votes; //U: Predicted result for the games (0 local, 1 away, 2 tie)
-		uint[2] doubles; //U: Games marked as double
+		uint[] votes; //U: Predicted result for the games (0 local, 1 away, 2 tie)
 		bool voted; //TODO: Let them vote more than once
 		bool extracted; //U: Only let them extract once
 	}
 	mapping(address => Bettor) bettors;
 
-	constructor() {
+	constructor(uint TotalGames) {
 		Chairperson = payable(msg.sender);
+
+		for (uint i = 0; i < TotalGames; i++) { //A: Fill the Games array TODO: There's got to be a faster way
+			Game memory game;
+			Games.push(game);
+		}
 	}
 	
-	function placeBet(uint[13] calldata votes, uint[2] calldata doubles) public payable { //U: Place a bet
+	function placeBet(uint[] calldata votes) public payable { //U: Place bets
 		Bettor storage bettor = bettors[msg.sender];
 
-		require(msg.value > 0, "No seas raton");
+		require(votes.length == Games.length, "Invalid length");
+		require(msg.value > 0, "No seas raton"); //TODO: Set minimum price
 		require(!bettor.voted, "TODO: Vote more than once");
-		require(!Started, "The games have already started"); 
-		require(!Done, "The games are already done");
+		require(!Started, "The games have already started");
+		require(!Done, "The games are already done, you should try extracting");
 
 		bettor.votes = votes;
-		bettor.doubles = doubles;
 		bettor.voted = true;
-		bettor.extracted = false;
 
 		TotalPool += msg.value;
 
-		for (uint game = 0; game < Games.length; game++) { //TODO: Is it more efficient to separate this loop in the 13 games?
-			if (doubles[0] == game || doubles[1] == game) { //A: Is marked as a double
-				Games[game][votes[game]] += 2;
-			} else {
-				Games[game][votes[game]]++;
-			}
+		for (uint i = 0; i < Games.length; i++) {
+			Games[i].votes[votes[i]]++;
 		}
 	}
 
-	function startGames() public {
+	function startGames() public { //U: Marks the games a started TODO: Automatize with a date
 		require(msg.sender == Chairperson, "Only the chairperson can set the games as started");
 		require(!Started, "The games have already started");
 		require(!Done, "The games are already done");
 
 		Started = true;
+
+		GamePool = TotalPool / (uint256(Games.length));
 	}
 
-	function inputResults(uint[13] calldata results) public { //U: Input the results and allow winners to extract their money
+	function inputResults(uint[] calldata results) public { //U: Input the results and allow winners to extract their money
+		require(results.length == Games.length, "Invalid length");
 		require(msg.sender == Chairperson, "Only the chairperson can input results");
 		require(Started, "The games haven't started yet"); //TODO: Should I be checking for this?
 		require(!Done, "You've already input the results");
 
-		Results = results;
 		Done = true;
 
+		for (uint i = 0; i < Games.length; i++) {
+			Games[i].result = results[i];
+		}
+
+		//TODO: Move this transfer to when they place a bet
 		uint256 forChair = TotalPool * 500 / 10000; //A: 5% for the chairperson
 		TotalPool -= forChair;
 		Chairperson.transfer(forChair);
@@ -74,27 +88,22 @@ contract Wager {
 	function claimPrize() public { //U: Let the winners extract their prize
 		Bettor storage bettor = bettors[msg.sender];
 		
-		require(Started, "The games haven't started yet");
+		require(Started, "The games haven't started yet"); //TODO: Should I be checking for this?
 		require(Done, "The games aren't done yet");
+		require(bettor.voted, "You didn't participate");
 		require(!bettor.extracted, "You've already extracted");
 
-		uint256 forWinner = 0;
-		for (uint game = 0; game < Results.length; game++) {
-			uint256 thisGame = 0;
-			if (bettor.votes[game] == Results[game]) { //A: They got this one right
-				thisGame =
-					TotalPool * 769 / 10000 //A: 1/13th of the pool for each game
-					/ Games[game][Results[game]]; //A: 1/guesses for this result
-
-				if (bettor.doubles[0] == game || bettor.doubles[1] == game) { //A: They marked it as a double
-					thisGame *= 2;
-				}
+		uint256 prize = 0;
+		for (uint i = 0; i < Games.length; i++) {
+			uint result = Games[i].result;
+			uint otherVotes = Games[i].votes[result];
+			if (bettor.votes[i] == result) { //A: They got this one right
+				prize += GamePool / uint256(otherVotes); //A: 1/guesses for this result
+				//A: It's not dividing by zero because AT LEAST this person voted for this result
 			}
-
-			forWinner += thisGame;
 		}
 
-		bettor.extracted = true; //A: Set it before transfering so that they can't 
-		payable(msg.sender).transfer(forWinner);
+		bettor.extracted = true; //A: Set it before transfering so that they can't send a request again
+		payable(msg.sender).transfer(prize);
 	}
 }
